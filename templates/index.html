@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PDF Keyword Search Tool</title>
+</head>
+<body>
+    <h1>Upload PDF and Search Keyword</h1>
+    <form method="post" enctype="multipart/form-data">
+        <label>Keyword: <input type="text" name="keyword" required></label><br><br>
+        <label>Upload PDF: <input type="file" name="file" accept="application/pdf" required></label><br><br>
+        <button type="submit">Submit</button>
+    </form>
+    {% if result %}
+        <p><strong>Matched pages saved as:</strong> {{ result }}</p>
+    {% endif %}
+</body>
+</html>
