@@ -1,13 +1,12 @@
 import os
 import datetime
 import sqlite3
-from flask import Flask, request, render_template
+import re
 from PyPDF2 import PdfReader, PdfWriter
 from pdf2image import convert_from_path
 from PIL import Image
 import pytesseract
 
-app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
 OUTPUT_FOLDER = 'output'
 DB_PATH = 'database.db'
@@ -27,19 +26,27 @@ def init_db():
         )''')
 init_db()
 
-# Extract alphanumeric ID from custom cropped region
-def extract_unique_id_from_fixed_region(image, left, top, right, bottom):
-    cropped = image.crop((left, top, right, bottom))
-    raw_text = pytesseract.image_to_string(cropped)
-    alphanumeric_id = ''.join(filter(str.isalnum, raw_text))
-    return alphanumeric_id or "N/A"
+# Extract alphanumeric ID next to a keyword
+def extract_id_next_to_keyword(image, id_keyword):
+    text = pytesseract.image_to_string(image)
+    lines = text.split('\n')
+
+    for line in lines:
+        if id_keyword.upper() in line.upper():
+            words = line.strip().replace("=", " ").replace(":", " ").split()
+            for i, word in enumerate(words):
+                if id_keyword.upper() in word.upper():
+                    if i + 1 < len(words):
+                        next_word = words[i + 1]
+                        return next_word if next_word else "N/A"
+    return "N/A"
 
 # Extract text from full image
 def extract_text_from_image(image):
     return pytesseract.image_to_string(image)
 
-# Main logic to process image or PDF with keyword search and crop bounds
-def search_and_split(file_path, keyword, crop_bounds):
+# Main logic to process image or PDF with keyword search and ID extraction
+def search_and_split(file_path, keyword, id_keyword):
     ext = os.path.splitext(file_path)[-1].lower()
     matched_pages = []
     extracted_id = None
@@ -54,7 +61,7 @@ def search_and_split(file_path, keyword, crop_bounds):
             image.save(output_path)
             output_name = os.path.basename(file_path)
 
-        extracted_id = extract_unique_id_from_fixed_region(image, *crop_bounds)
+        extracted_id = extract_id_next_to_keyword(image, id_keyword)
 
     elif ext == '.pdf':
         reader = PdfReader(file_path)
@@ -63,17 +70,17 @@ def search_and_split(file_path, keyword, crop_bounds):
             if keyword.lower() in text.lower():
                 matched_pages.append(i)
 
-        if not matched_pages:
-            images = convert_from_path(file_path)
-            for i, image in enumerate(images):
-                text = extract_text_from_image(image)
-                if keyword.lower() in text.lower():
-                    matched_pages.append(i)
-                if extracted_id is None:
-                    extracted_id = extract_unique_id_from_fixed_region(image, *crop_bounds)
-        else:
-            images = convert_from_path(file_path, first_page=1, last_page=1)
-            extracted_id = extract_unique_id_from_fixed_region(images[0], *crop_bounds)
+        images = convert_from_path(file_path)
+
+        for i, image in enumerate(images):
+            if extracted_id is None:
+                extracted_id = extract_id_next_to_keyword(image, id_keyword)
+
+            if i in matched_pages:
+                continue
+            text = extract_text_from_image(image)
+            if keyword.lower() in text.lower():
+                matched_pages.append(i)
 
         if matched_pages:
             writer = PdfWriter()
@@ -91,30 +98,30 @@ def search_and_split(file_path, keyword, crop_bounds):
 
     return output_name, extracted_id
 
-# Main route
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    if request.method == 'POST':
-        keyword = request.form['keyword']
-        file = request.files['file']
+# -------------------------------
+# CLI-Based Main Function
+# -------------------------------
+def main():
+    print("📄 Keyword & ID Extractor")
+    file_path = input("Enter path to PDF/Image file: ").strip()
+    if not os.path.isfile(file_path):
+        print("File not found.")
+        return
 
-        # Get crop bounds from form
-        try:
-            left = int(request.form['left'])
-            top = int(request.form['top'])
-            right = int(request.form['right'])
-            bottom = int(request.form['bottom'])
-            crop_bounds = (left, top, right, bottom)
-        except Exception as e:
-            return f"❌ Invalid crop values: {e}"
+    keyword = input("Enter search keyword (e.g. Invoice): ").strip()
+    id_keyword = input("Enter ID keyword (e.g. fileNo): ").strip()
 
-        if file and keyword:
-            file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-            file.save(file_path)
-            result_file, extracted_id = search_and_split(file_path, keyword, crop_bounds)
-            return render_template('index.html', result=result_file, extracted_id=extracted_id)
+    upload_path = os.path.join(UPLOAD_FOLDER, os.path.basename(file_path))
+    if file_path != upload_path:
+        with open(file_path, "rb") as src, open(upload_path, "wb") as dst:
+            dst.write(src.read())
 
-    return render_template('index.html')
+    result_file, extracted_id = search_and_split(upload_path, keyword, id_keyword)
+
+    
+    if result_file:
+        print(f"Matched pages saved as: {os.path.join(OUTPUT_FOLDER, result_file)}")
+    print(f"Extracted ID: {extracted_id}")
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    main()
