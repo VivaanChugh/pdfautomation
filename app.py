@@ -102,7 +102,7 @@ def search_and_split(file_path, keyword, id_keyword):
 # CLI-Based Main Function
 # -------------------------------
 def main():
-    print("📄 Keyword & ID Extractor")
+    print("Keyword & ID Extractor")
     file_path = input("Enter path to PDF/Image file (without quotations): ").strip()
     if not os.path.isfile(file_path):
         print("File not found.")
