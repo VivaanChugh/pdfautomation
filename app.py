@@ -93,7 +93,7 @@ def process_pdf(pdf_path, output_base, id_keyword, progress_callback, index, tot
             log_text(pdf_name, i + 1, extracted_id, output_base)
 
             if extracted_id:
-                base_filename = f"{extracted_id}_NoticeOfDismissal"
+                base_filename = f"{extracted_id}_Notice Of Dismissal"
                 final_path = get_unique_filename(output_dir, base_filename)
                 with open(final_path, 'wb') as out_f:
                     writer.write(out_f)
