@@ -110,9 +110,12 @@ def process_pdf(pdf_path, output_base, id_keyword, progress_callback, index, tot
 
 class SplitPDFApp:
     def __init__(self, root):
-        self.root = root
+        
+        self.root = root 
         root.title("Split Dismissal & Lien PDFs (Extract ID)")
+        
         root.geometry("900x320")
+   
 
         self.dismissal_folder = tk.StringVar()
         self.lien_folder = tk.StringVar()
