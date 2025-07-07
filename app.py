@@ -1,6 +1,5 @@
 import os
 import re
-import shutil
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -11,15 +10,27 @@ import numpy as np
 import easyocr
 import torch
 import gc
+import csv
+from datetime import datetime
+import sys
 
-
+# Setup EasyOCR
 ocr_reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
 
-def log_text(pdf_name, page_number, extracted_id, output_base):
-    log_path = os.path.join(output_base, "log.txt")
-    with open(log_path, "a", encoding="utf-8") as f:
-        f.write(f"[{pdf_name} - Page {page_number}]\n")
-        f.write(f"Extracted ID: {extracted_id or 'None'}\n\n")
+# AppData path for logs
+APPDATA_PATH = os.getenv('APPDATA') or os.path.expanduser("~")
+TIMESTAMP = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+LOG_FILE_PATH = os.path.join(APPDATA_PATH, f"ocr_log_{TIMESTAMP}.csv")
+
+# Write CSV header
+with open(LOG_FILE_PATH, "w", newline='', encoding="utf-8") as f:
+    writer = csv.writer(f)
+    writer.writerow(["PDF Name", "Page", "Extracted ID", "Status"])
+
+def log_to_csv(pdf_name, page_number, extracted_id, status):
+    with open(LOG_FILE_PATH, "a", newline='', encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([pdf_name, page_number, extracted_id or "None", status])
 
 def extract_text(image):
     try:
@@ -50,11 +61,11 @@ def extract_id(image, id_keyword):
 
         for kw in keyword_variations:
             regex_kw = re.sub(r' ', r'\\s+', kw)
-            pattern = rf'{regex_kw}[^A-Za-z0-9]*_?([A-Za-z0-9][A-Za-z0-9\-_]+)'
+            pattern = rf'{regex_kw}[^A-Za-z0-9]*_?([A-Za-z0-9][A-Za-z0-9\-_]+(?:[-][A-Za-z0-9]+)*)'
             matches = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE)
             for match in matches:
                 candidate = match.group(1)
-                if len(candidate) >= 3:
+                if len(candidate) >= 6:  
                     return candidate
         return None
     except Exception as e:
@@ -68,7 +79,7 @@ def get_unique_filename(base_path, base_name, extension=".pdf"):
         counter += 1
     return os.path.join(base_path, filename)
 
-def process_pdf(pdf_path, output_base, id_keyword, progress_callback, index, total_files):
+def process_pdf(pdf_path, output_base, id_keyword, progress_callback, index, total_files, suffix_label):
     pdf_name = os.path.splitext(os.path.basename(pdf_path))[0]
     output_dir = os.path.join(output_base, pdf_name)
     os.makedirs(output_dir, exist_ok=True)
@@ -90,15 +101,16 @@ def process_pdf(pdf_path, output_base, id_keyword, progress_callback, index, tot
 
             extracted_id = extract_id(image, id_keyword)
 
-            log_text(pdf_name, i + 1, extracted_id, output_base)
+            log_to_csv(pdf_name, i + 1, extracted_id, "Success" if extracted_id else "No ID Found")
 
             if extracted_id:
-                base_filename = f"{extracted_id}_Notice Of Dismissal"
+                base_filename = f"{extracted_id}_{suffix_label}"
                 final_path = get_unique_filename(output_dir, base_filename)
                 with open(final_path, 'wb') as out_f:
                     writer.write(out_f)
 
         except Exception as e:
+            log_to_csv(pdf_name, i + 1, "Error", str(e))
             print(f"Error processing page {i+1} of {pdf_name}: {e}")
 
         gc.collect()
@@ -110,15 +122,13 @@ def process_pdf(pdf_path, output_base, id_keyword, progress_callback, index, tot
 
 class SplitPDFApp:
     def __init__(self, root):
-        
-        self.root = root 
+        self.root = root
         root.title("Split Dismissal & Lien PDFs (Extract ID)")
-        
         root.geometry("900x320")
-   
 
         self.dismissal_folder = tk.StringVar()
         self.lien_folder = tk.StringVar()
+        self.is_processing = False
 
         frame = tk.Frame(root)
         frame.pack(pady=10)
@@ -127,7 +137,8 @@ class SplitPDFApp:
         left.grid(row=0, column=0, padx=30)
         tk.Label(left, text="Dismissal PDFs (FileNo)").pack()
         tk.Entry(left, textvariable=self.dismissal_folder, width=40).pack()
-        tk.Button(left, text="Browse", command=self.browse_dismissal).pack(pady=2)
+        self.btn_dismissal = tk.Button(left, text="Browse", command=self.browse_dismissal)
+        self.btn_dismissal.pack(pady=2)
         self.progress_dismissal = ttk.Progressbar(left, length=300, mode="determinate")
         self.progress_dismissal.pack(pady=10)
 
@@ -135,26 +146,44 @@ class SplitPDFApp:
         right.grid(row=0, column=1, padx=30)
         tk.Label(right, text="Lien PDFs (CaseNo)").pack()
         tk.Entry(right, textvariable=self.lien_folder, width=40).pack()
-        tk.Button(right, text="Browse", command=self.browse_lien).pack(pady=2)
+        self.btn_lien = tk.Button(right, text="Browse", command=self.browse_lien)
+        self.btn_lien.pack(pady=2)
         self.progress_lien = ttk.Progressbar(right, length=300, mode="determinate")
         self.progress_lien.pack(pady=10)
 
+    def disable_buttons(self):
+        self.btn_dismissal.config(state="disabled")
+        self.btn_lien.config(state="disabled")
+
+    def enable_buttons(self):
+        self.btn_dismissal.config(state="normal")
+        self.btn_lien.config(state="normal")
+
     def browse_dismissal(self):
+        if self.is_processing:
+            return
         path = filedialog.askdirectory()
         if path:
             self.dismissal_folder.set(path)
-            self.run_type(path, "dismissal", "FileNo", self.progress_dismissal)
+            self.run_type(path, "dismissal", "FileNo", self.progress_dismissal, "Notice Of Dismissal")
 
     def browse_lien(self):
+        if self.is_processing:
+            return
         path = filedialog.askdirectory()
         if path:
             self.lien_folder.set(path)
-            self.run_type(path, "lien", "CaseNo", self.progress_lien)
+            self.run_type(path, "lien", "CaseNo", self.progress_lien, "Notice Of Lien")
 
-    def run_type(self, folder, keyword_match, id_keyword, progressbar):
+    def run_type(self, folder, keyword_match, id_keyword, progressbar, suffix_label):
         def worker():
+            self.is_processing = True
+            self.disable_buttons()
+
             if not os.path.isdir(folder):
                 messagebox.showerror("Error", "Invalid folder path.")
+                self.enable_buttons()
+                self.is_processing = False
                 return
 
             pdfs = [
@@ -165,6 +194,8 @@ class SplitPDFApp:
 
             if not pdfs:
                 messagebox.showerror("Error", f"No '{keyword_match}' PDFs found.")
+                self.enable_buttons()
+                self.is_processing = False
                 return
 
             progressbar["value"] = 0
@@ -176,13 +207,15 @@ class SplitPDFApp:
 
             try:
                 for idx, path in enumerate(pdfs):
-                    process_pdf(path, folder, id_keyword, update_progress, idx, total_files)
-                messagebox.showinfo("Done", f"Processed {total_files} {keyword_match} PDF(s).")
+                    process_pdf(path, folder, id_keyword, update_progress, idx, total_files, suffix_label)
+                messagebox.showinfo("Done", f"Processed {total_files} {keyword_match} PDF(s).\n\nLog: {LOG_FILE_PATH}")
             except Exception as e:
                 messagebox.showerror("Error", str(e))
+            finally:
+                self.enable_buttons()
+                self.is_processing = False
 
         threading.Thread(target=worker).start()
-
 
 if __name__ == "__main__":
     root = tk.Tk()
