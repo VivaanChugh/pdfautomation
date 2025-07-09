@@ -14,14 +14,14 @@ import gc
 from datetime import datetime, timedelta
 import sys
 
-# === Globals ===
+
 CURRENT_PROCESSING = {
     "pdf": None,
     "page": None,
     "total_pages": None
 }
 
-# === Paths and Logging ===
+
 def resource_path(relative_path):
     try:
         base_path = sys._MEIPASS
@@ -58,7 +58,7 @@ def log_exception(context, error):
     with open(log_file_path, "a", encoding="utf-8") as f:
         f.write(f"[{timestamp}] ERROR in {context}:\n{error}\n\n")
 
-# === OCR Readers ===
+
 easyocr_reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
 
 def preprocess_image(image):
@@ -157,7 +157,7 @@ def process_pdf(pdf_path, output_base, id_keyword, progress_callback, index, tot
     except Exception as e:
         log_exception("process_pdf", e)
 
-# === UI App ===
+
 class SplitPDFApp:
     def __init__(self, root):
         self.root = root
@@ -178,7 +178,7 @@ class SplitPDFApp:
         frame = tk.Frame(root)
         frame.pack(pady=10)
 
-        # Dismissal
+       
         left = tk.Frame(frame)
         left.grid(row=0, column=0, padx=30)
         tk.Label(left, text="Dismissal PDFs (FileNo)").pack()
@@ -187,7 +187,7 @@ class SplitPDFApp:
         self.progress_dismissal = ttk.Progressbar(left, length=300, mode="determinate")
         self.progress_dismissal.pack(pady=10)
 
-        # Lien
+   
         right = tk.Frame(frame)
         right.grid(row=0, column=1, padx=30)
         tk.Label(right, text="Lien PDFs (CaseNo)").pack()
@@ -256,7 +256,7 @@ class SplitPDFApp:
                 f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Program closed normally.\n")
         self.root.destroy()
 
-# === Main ===
+
 if __name__ == "__main__":
     clean_old_logs()
     root = tk.Tk()
