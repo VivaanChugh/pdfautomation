@@ -10,10 +10,10 @@ This Python script allows you to:
 ## Features
 
 - Supports `.pdf`, `.jpg`, `.jpeg`, `.png` files.
-- Uses **OCR (Tesseract)** for image-based text extraction.
+- Uses **easyOCR** and **OCR (Tesseract)** for image-based text extraction.
 - Converts PDFs to images when necessary.
-- Logs metadata in `database.db`.
-- Simple **CLI interface**.
+- Logs metadata in `.txt` file.
+- Simple **Graphic User Interface**.
 
 ## Requirements
 
