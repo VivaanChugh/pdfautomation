@@ -29,6 +29,9 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
+pytesseract.pytesseract.tesseract_cmd = os.path.join(resource_path("Tesseract-OCR"), "tesseract.exe")
+
+
 APP_LOG_DIR = os.path.join(os.getenv("APPDATA"), "PDFSplitter", "logs")
 os.makedirs(APP_LOG_DIR, exist_ok=True)
 log_file_path = os.path.join(APP_LOG_DIR, f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_log.txt")
