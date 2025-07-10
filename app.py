@@ -79,19 +79,29 @@ def extract_id_dismissal(image):
         log_exception("extract_id_dismissal", e)
         return None
 
+
 def extract_id_lien(image):
     try:
         image = preprocess_image(image)
-        config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-'
-        text = pytesseract.image_to_string(image, config=config)
-        matches = re.findall(r'\b[A-Z]?-?\d{2}-[A-Z]{2}-\d{2}-\d{6}\b', text)
-        if matches:
-            return matches[0]
-        numeric_matches = re.findall(r'\b\d{4,8}\b', text)
-        return numeric_matches[0] if numeric_matches else None
+        text = pytesseract.image_to_string(image)
+        lines = text.splitlines()
+
+        for line in lines:
+            line_lower = line.lower()
+            if "case no" in line_lower:
+                idx = line_lower.find("case no")
+                after = line[idx + len("case no"):].strip(" .:_-")
+                parts = after.split()
+                if parts:
+                    cleaned = parts[0].strip(" .:_-")
+                    return cleaned
+        return None
     except Exception as e:
         log_exception("extract_id_lien", e)
         return None
+
+
+
 
 def get_unique_filename(base_path, base_name, extension=".pdf"):
     filename = f"{base_name}{extension}"
