@@ -78,11 +78,11 @@ def extract_id_dismissal(image):
         text = "\n".join(results)
 
 
-        # Match extended patterns after "File No" allowing periods
-        matches = re.findall(r'(?:File\s*No[:.;]?\s*)([A-Za-z0-9.\-]+)', text, re.IGNORECASE)
+        matches = re.findall(r'(?:File\s*No[:.;]?\s*)([A-Za-z0-9.,\-]+)', text, re.IGNORECASE)
 
         if matches:
-            clean_id = re.sub(r'\.', '', matches[0])  # Remove periods like in "C0057.73"
+            clean_id = re.sub(r'\.', '', matches[0])  
+            clean_id = re.sub(r'\,', '', matches[0]) 
             return clean_id
 
         return None
@@ -153,10 +153,13 @@ def process_pdf(pdf_path, output_base, id_keyword, progress_callback, index, tot
                     notice_label = "Notice Of Dismissal"
                 else:
                     extracted_id = extract_id_lien(image)
-                    notice_label = "Notice Of Lien"
+                    
 
                 if extracted_id:
-                    base_filename = f"{extracted_id}_{notice_label}"
+                    if "fileno" in id_keyword.lower():
+                        base_filename = f"{extracted_id}_{notice_label}"
+                    else:
+                        base_filename = f"{extracted_id}"
                     final_path = get_unique_filename(output_dir, base_filename)
                     with open(final_path, 'wb') as out_f:
                         writer.write(out_f)
