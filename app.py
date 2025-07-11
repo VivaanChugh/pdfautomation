@@ -76,11 +76,20 @@ def extract_id_dismissal(image):
         np_image = np.array(image.convert("RGB"))
         results = easyocr_reader.readtext(np_image, detail=0)
         text = "\n".join(results)
-        matches = re.findall(r'(?:File\s*No[:.]?\s*)([A-Za-z0-9\-]+)', text, re.IGNORECASE)
-        return matches[0] if matches else None
+
+
+        # Match extended patterns after "File No" allowing periods
+        matches = re.findall(r'(?:File\s*No[:.;]?\s*)([A-Za-z0-9.\-]+)', text, re.IGNORECASE)
+
+        if matches:
+            clean_id = re.sub(r'\.', '', matches[0])  # Remove periods like in "C0057.73"
+            return clean_id
+
+        return None
     except Exception as e:
         log_exception("extract_id_dismissal", e)
         return None
+
 
 
 def extract_id_lien(image):
