@@ -16,11 +16,13 @@ import sys
 import io
 import subprocess
 
+
 CURRENT_PROCESSING = {
     "pdf": None,
     "page": None,
     "total_pages": None
 }
+
 
 def resource_path(relative_path):
     try:
@@ -29,10 +31,13 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
+
 pytesseract.pytesseract.tesseract_cmd = os.path.join(resource_path("Tesseract-OCR"), "tesseract.exe")
+
 
 APP_LOG_DIR = os.path.join(os.getenv("APPDATA"), "PDFSplitter", "logs")
 os.makedirs(APP_LOG_DIR, exist_ok=True)
+
 
 def clean_old_logs():
     for filename in os.listdir(APP_LOG_DIR):
@@ -41,6 +46,7 @@ def clean_old_logs():
             created_time = datetime.fromtimestamp(os.path.getctime(full_path))
             if datetime.now() - created_time > timedelta(days=30):
                 os.remove(full_path)
+
 
 def log_text(pdf_name, page_number, extracted_id, log_file_path, final_path=None):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -54,18 +60,22 @@ def log_text(pdf_name, page_number, extracted_id, log_file_path, final_path=None
             f.write("No ID extracted on this page.\n")
         f.write("\n")
 
+
 def log_exception(context, error, log_file_path):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(log_file_path, "a", encoding="utf-8") as f:
         f.write(f"[{timestamp}] ERROR in {context}:\n{error}\n\n")
 
+
 easyocr_reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
+
 
 def preprocess_image(image):
     image = image.convert("L")
     image = ImageOps.autocontrast(image)
     image = ImageEnhance.Sharpness(image).enhance(2.0)
     return image
+
 
 def extract_id_dismissal(image):
     try:
@@ -75,6 +85,7 @@ def extract_id_dismissal(image):
         text = "\n".join(results)
         matches = re.findall(r'(?:File\s*No[:.;]?\s*)([A-Za-z0-9.,\-]+)', text, re.IGNORECASE)
 
+
         if matches:
             clean_id = re.sub(r'[.,]', '', matches[0])
             return clean_id
@@ -83,11 +94,13 @@ def extract_id_dismissal(image):
         log_exception("extract_id_dismissal", e, log_file_path=None)
         return None
 
+
 def extract_id_lien(image):
     try:
         image = preprocess_image(image)
         text = pytesseract.image_to_string(image)
         lines = text.splitlines()
+
 
         for line in lines:
             line_lower = line.lower()
@@ -103,6 +116,7 @@ def extract_id_lien(image):
         log_exception("extract_id_lien", e, log_file_path=None)
         return None
 
+
 def get_unique_filename(base_path, base_name, extension=".pdf"):
     filename = f"{base_name}{extension}"
     counter = 1
@@ -111,19 +125,23 @@ def get_unique_filename(base_path, base_name, extension=".pdf"):
         counter += 1
     return os.path.join(base_path, filename)
 
+
 def process_pdf(pdf_path, output_base, id_keyword, progress_callback, index, total_files, log_file_path):
     try:
         pdf_name = os.path.splitext(os.path.basename(pdf_path))[0]
         output_dir = os.path.join(output_base, pdf_name)
         os.makedirs(output_dir, exist_ok=True)
 
+
         reader = PdfReader(pdf_path)
         total_pages = len(reader.pages)
+
 
         for i, page in enumerate(reader.pages):
             CURRENT_PROCESSING["pdf"] = pdf_name
             CURRENT_PROCESSING["page"] = i + 1
             CURRENT_PROCESSING["total_pages"] = total_pages
+
 
             try:
                 writer = PdfWriter()
@@ -132,14 +150,17 @@ def process_pdf(pdf_path, output_base, id_keyword, progress_callback, index, tot
                 with open(temp_path, 'wb') as f:
                     writer.write(f)
 
-                image = convert_from_path(temp_path, dpi=300, poppler_path=resource_path("poppler-bin"))[0]
+
+                image = convert_from_path(temp_path, dpi=350, poppler_path=resource_path("poppler-bin"))[0]
                 os.remove(temp_path)
+
 
                 if "fileno" in id_keyword.lower():
                     extracted_id = extract_id_dismissal(image)
                     notice_label = "Notice Of Dismissal"
                 else:
                     extracted_id = extract_id_lien(image)
+
 
                 if extracted_id:
                     base_filename = f"{extracted_id}_{notice_label}" if "fileno" in id_keyword.lower() else f"{extracted_id}"
@@ -150,20 +171,26 @@ def process_pdf(pdf_path, output_base, id_keyword, progress_callback, index, tot
                 else:
                     log_text(pdf_name, i + 1, None, log_file_path)
 
+
             except Exception as e:
                 log_exception("process_pdf", f"file-level error in {pdf_name}:\n{e}", log_file_path)
+
 
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
+
             progress = ((index + (i + 1) / total_pages) / total_files) * 100
             progress_callback(progress)
 
+
         CURRENT_PROCESSING["pdf"] = None
+
 
     except Exception as e:
         log_exception("process_pdf", e, log_file_path)
+
 
 class SplitPDFApp:
     def __init__(self, root):
@@ -175,6 +202,7 @@ class SplitPDFApp:
         self.lien_folder = tk.StringVar()
         self.latest_log_file = None
 
+
         # --- Top Logo ---
         logo_path = resource_path("logo.png")
         self.logo_frame = tk.Frame(root)
@@ -185,6 +213,7 @@ class SplitPDFApp:
             logo_label = tk.Label(self.logo_frame, image=logo_photo)
             logo_label.image = logo_photo
             logo_label.pack()
+
 
         # --- Feature Button Bar ---
         self.button_frame = tk.Frame(root)
@@ -201,43 +230,53 @@ class SplitPDFApp:
             btn.grid(row=0, column=i, padx=10)
             self.feature_buttons[name] = btn
 
+
         # --- Main Content Frames ---
         self.content_frame = tk.Frame(root)
         self.content_frame.pack(fill='both', expand=True)
+
 
         self.splitter_tab = tk.Frame(self.content_frame)
         self.merger_tab = tk.Frame(self.content_frame)
         self.redaction_tab = tk.Frame(self.content_frame)
         self.compressor_tab = tk.Frame(self.content_frame)
 
+
         self.init_splitter_tab()
         self.init_merger_tab()
         self.init_redaction_tab()
         self.init_compressor_tab()
 
+
         # Show Splitter by default
         self.show_splitter()
+
 
     def show_splitter(self):
         self._raise_tab(self.splitter_tab)
         self._highlight_button("Splitter")
 
+
     def show_merger(self):
         self._raise_tab(self.merger_tab)
         self._highlight_button("Merger")
+
 
     def show_redaction(self):
         self._raise_tab(self.redaction_tab)
         self._highlight_button("Redaction")
 
+
     def show_compressor(self):
         self._raise_tab(self.compressor_tab)
         self._highlight_button("Compressor")
+
 
     def _raise_tab(self, tab):
         for frame in [self.splitter_tab, self.merger_tab, self.redaction_tab, self.compressor_tab]:
             frame.pack_forget()
         tab.pack(fill='both', expand=True)
+
 
     def _highlight_button(self, name):
         for btn_name, btn in self.feature_buttons.items():
@@ -246,11 +285,14 @@ class SplitPDFApp:
             else:
                 btn.config(bg="SystemButtonFace", fg="black")
 
+
     def init_splitter_tab(self):
-        
+       
+
 
         frame = tk.Frame(self.splitter_tab)
         frame.pack(pady=10)
+
 
         left = tk.Frame(frame)
         left.grid(row=0, column=0, padx=30)
@@ -260,6 +302,7 @@ class SplitPDFApp:
         self.progress_dismissal = ttk.Progressbar(left, length=300, mode="determinate")
         self.progress_dismissal.pack(pady=10)
 
+
         right = tk.Frame(frame)
         right.grid(row=0, column=1, padx=30)
         tk.Label(right, text="Lien PDFs (CaseNo)").pack()
@@ -268,127 +311,141 @@ class SplitPDFApp:
         self.progress_lien = ttk.Progressbar(right, length=300, mode="determinate")
         self.progress_lien.pack(pady=10)
 
+
     def init_merger_tab(self):
         label = tk.Label(self.merger_tab, text="PDF Merger", font=("Arial", 14))
         label.pack(pady=10)
         
-        self.merger_folder = tk.StringVar()
-        self.merger_subfolders = []
+        self.remove_permissions_folder = tk.StringVar()
+        self.copies_output_folder = None  # Path to last _copies folder
         self.merger_files_var = tk.StringVar(value=[])
+        self.copied_files_var = tk.StringVar(value=[])
         
-        select_btn = tk.Button(self.merger_tab, text="Select Folder to Merge PDFs by Subfolder", command=self.select_merger_folder)
-        select_btn.pack(pady=5)
+        # Remove Permissions Section
+        remove_frame = tk.Frame(self.merger_tab)
+        remove_frame.pack(pady=5)
+        tk.Label(remove_frame, text="Step 1: Remove Permissions from PDFs").pack()
+        tk.Button(remove_frame, text="Select Folder and Remove Permissions", command=self.remove_permissions_from_pdfs).pack(pady=2)
+        self.remove_permissions_label = tk.Label(remove_frame, textvariable=self.remove_permissions_folder, fg="gray")
+        self.remove_permissions_label.pack(pady=2)
+        self.copied_files_listbox = tk.Listbox(remove_frame, listvariable=self.copied_files_var, width=70, height=4)
+        self.copied_files_listbox.pack(pady=2)
         
-        self.folder_label = tk.Label(self.merger_tab, textvariable=self.merger_folder, fg="gray")
-        self.folder_label.pack(pady=2)
-        
-        self.files_listbox = tk.Listbox(self.merger_tab, listvariable=self.merger_files_var, width=70, height=8)
-        self.files_listbox.pack(pady=5)
-        
-        merge_btn = tk.Button(self.merger_tab, text="Merge PDFs in Each Subfolder", command=self.merge_pdfs_by_subfolder)
-        merge_btn.pack(pady=10)
+        # Merge Section
+        merge_frame = tk.Frame(self.merger_tab)
+        merge_frame.pack(pady=10)
+        tk.Label(merge_frame, text="Step 2: Merge Cleaned PDFs").pack()
+        self.merge_folder_label = tk.Label(merge_frame, text="No cleaned folder yet", fg="gray")
+        self.merge_folder_label.pack(pady=2)
+        self.files_listbox = tk.Listbox(merge_frame, listvariable=self.merger_files_var, width=70, height=4)
+        self.files_listbox.pack(pady=2)
+        self.merge_btn = tk.Button(merge_frame, text="Merge All PDFs in Cleaned Folder", command=self.merge_all_pdfs_in_folder, state="disabled")
+        self.merge_btn.pack(pady=2)
 
-    def select_merger_folder(self):
-        folder = filedialog.askdirectory()
-        if folder:
-            self.merger_folder.set(folder)
-            # List subfolders
-            subfolders = [os.path.join(folder, d) for d in os.listdir(folder) if os.path.isdir(os.path.join(folder, d))]
-            self.merger_subfolders = subfolders
-            # List PDFs directly in the folder
-            direct_pdfs = [f for f in os.listdir(folder) if f.lower().endswith('.pdf') and os.path.isfile(os.path.join(folder, f))]
-            display = []
-            if direct_pdfs:
-                display.append(f"[This Folder]: {len(direct_pdfs)} PDFs")
-            display += [f"{os.path.basename(sf)}: {len([f for f in os.listdir(sf) if f.lower().endswith('.pdf')])} PDFs" for sf in subfolders]
-            self.merger_files_var.set(display)
-            self.merger_direct_pdfs = direct_pdfs
-
-    def merge_pdfs_by_subfolder(self):
-        folder = self.merger_folder.get()
+    def remove_permissions_from_pdfs(self):
+        folder = filedialog.askdirectory(title="Select Folder to Remove Permissions from PDFs")
         if not folder:
-            messagebox.showerror("No Folder Selected", "Please select a folder with PDFs or subfolders containing PDFs.")
+            return
+        self.remove_permissions_folder.set(folder)
+        output_folder = folder.rstrip("/\\") + "_copies"
+        self.copies_output_folder = output_folder
+        os.makedirs(output_folder, exist_ok=True)
+        copied_files = []
+        for root, dirs, files in os.walk(folder):
+            rel = os.path.relpath(root, folder)
+            out_subfolder = os.path.join(output_folder, rel) if rel != '.' else output_folder
+            os.makedirs(out_subfolder, exist_ok=True)
+            for f in files:
+                if f.lower().endswith('.pdf'):
+                    in_path = os.path.join(root, f)
+                    out_path = os.path.join(out_subfolder, f)
+                    try:
+                        reader = PdfReader(in_path)
+                        writer = PdfWriter()
+                        for page in reader.pages:
+                            writer.add_page(page)
+                        with open(out_path, "wb") as out_f:
+                            writer.write(out_f)
+                        copied_files.append(out_path)
+                    except Exception as e:
+                        copied_files.append(f"ERROR: {in_path}")
+        self.copied_files_var.set([f"Copied: {os.path.relpath(f, output_folder)}" if not f.startswith("ERROR") else f for f in copied_files])
+        # Update merge section
+        self.merge_folder_label.config(text=f"Will merge: {output_folder}", fg="black")
+        self.merge_btn.config(state="normal")
+        # List PDFs in output folder
+        pdf_files = []
+        for root, dirs, files in os.walk(output_folder):
+            for f in files:
+                if f.lower().endswith('.pdf'):
+                    pdf_files.append(os.path.join(root, f))
+        display = [f"{len(pdf_files)} PDFs found in cleaned folder"]
+        self.merger_files_var.set(display)
+        self.merger_pdf_files = pdf_files
+        messagebox.showinfo("Done", f"Copied {len(copied_files)} PDFs to {output_folder}.")
+
+    def merge_all_pdfs_in_folder(self):
+        folder = self.copies_output_folder
+        if not folder or not hasattr(self, 'merger_pdf_files') or not self.merger_pdf_files:
+            messagebox.showerror("No PDFs Found", "Please run Step 1 to create cleaned PDFs before merging.")
             return
         log_file_path = os.path.join(APP_LOG_DIR, f"merger_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_log.txt")
         self.latest_log_file = log_file_path
         try:
-            # Merge PDFs directly in the selected folder (if any)
-            if hasattr(self, 'merger_direct_pdfs') and self.merger_direct_pdfs:
-                merger = PdfWriter()
-                pdf_files = [os.path.join(folder, f) for f in self.merger_direct_pdfs]
-                for pdf_file in pdf_files:
-                    try:
-                        reader = PdfReader(pdf_file)
-                        for page in reader.pages:
-                            merger.add_page(page)
-                    except Exception as e:
-                        log_exception("merge_pdfs_by_subfolder", f"Failed to read {pdf_file}: {e}", log_file_path)
-                        continue
-                output_path = os.path.join(folder, f"{os.path.basename(folder)}.pdf")
-                with open(output_path, "wb") as f_out:
-                    merger.write(f_out)
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                with open(log_file_path, "a", encoding="utf-8") as f:
-                    f.write(f"[{timestamp}] Merged PDF files in [This Folder]:\n")
-                    for file in pdf_files:
-                        f.write(f"  - {file}\n")
-                    f.write(f"Saved merged PDF as: {output_path}\n\n")
-            # Merge PDFs in each subfolder
-            for subfolder in self.merger_subfolders:
-                pdf_files = [os.path.join(subfolder, f) for f in os.listdir(subfolder) if f.lower().endswith('.pdf')]
-                if not pdf_files:
+            merger = PdfWriter()
+            for pdf_file in self.merger_pdf_files:
+                try:
+                    reader = PdfReader(pdf_file)
+                    for page in reader.pages:
+                        merger.add_page(page)
+                except Exception as e:
+                    log_exception("merge_all_pdfs_in_folder", f"Failed to read {pdf_file}: {e}", log_file_path)
                     continue
-                merger = PdfWriter()
-                for pdf_file in pdf_files:
-                    try:
-                        reader = PdfReader(pdf_file)
-                        for page in reader.pages:
-                            merger.add_page(page)
-                    except Exception as e:
-                        log_exception("merge_pdfs_by_subfolder", f"Failed to read {pdf_file}: {e}", log_file_path)
-                        continue
-                output_path = os.path.join(folder, f"{os.path.basename(subfolder)}.pdf")
-                with open(output_path, "wb") as f_out:
-                    merger.write(f_out)
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                with open(log_file_path, "a", encoding="utf-8") as f:
-                    f.write(f"[{timestamp}] Merged PDF files in {subfolder}:\n")
-                    for file in pdf_files:
-                        f.write(f"  - {file}\n")
-                    f.write(f"Saved merged PDF as: {output_path}\n\n")
-            messagebox.showinfo("Success", f"Merged PDFs in folder and all subfolders. See log for details.")
+            output_path = os.path.join(folder, f"{os.path.basename(folder)}.pdf")
+            with open(output_path, "wb") as f_out:
+                merger.write(f_out)
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open(log_file_path, "a", encoding="utf-8") as f:
+                f.write(f"[{timestamp}] Merged PDF files in {folder} and all subfolders:\n")
+                for file in self.merger_pdf_files:
+                    f.write(f"  - {file}\n")
+                f.write(f"Saved merged PDF as: {output_path}\n\n")
+            messagebox.showinfo("Success", f"Merged {len(self.merger_pdf_files)} PDFs into {output_path}.")
         except Exception as e:
-            log_exception("merge_pdfs_by_subfolder", e, log_file_path)
+            log_exception("merge_all_pdfs_in_folder", e, log_file_path)
             messagebox.showerror("Error", f"Failed to merge PDFs:\n{e}")
+
 
     def init_redaction_tab(self):
         label = tk.Label(self.redaction_tab, text="PDF Redaction", font=("Arial", 14))
         label.pack(pady=20)
         # Placeholder for redaction UI
 
+
     def init_compressor_tab(self):
         label = tk.Label(self.compressor_tab, text="PDF Compressor", font=("Arial", 14))
         label.pack(pady=10)
-        
+       
         self.compress_input_file = None
         self.compress_input_folder = None
         self.compress_original_size_var = tk.StringVar(value="Original Size: N/A")
         self.compress_compressed_size_var = tk.StringVar(value="Compressed Size: N/A")
-        
+       
         select_file_btn = tk.Button(self.compressor_tab, text="Select PDF File to Compress", command=self.select_compress_file)
         select_file_btn.pack(pady=5)
-        
+       
         select_folder_btn = tk.Button(self.compressor_tab, text="Select Folder to Compress All PDFs", command=self.select_compress_folder)
         select_folder_btn.pack(pady=5)
-        
+       
         self.compress_file_label = tk.Label(self.compressor_tab, text="No file or folder selected", fg="gray")
         self.compress_file_label.pack(pady=2)
-        
+       
         tk.Label(self.compressor_tab, textvariable=self.compress_original_size_var).pack(pady=2)
         tk.Label(self.compressor_tab, textvariable=self.compress_compressed_size_var).pack(pady=2)
-        
+       
         compress_btn = tk.Button(self.compressor_tab, text="Compress PDF(s)", command=self.compress_pdf)
         compress_btn.pack(pady=10)
+
 
     def select_compress_file(self):
         file = filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
@@ -400,6 +457,7 @@ class SplitPDFApp:
             self.compress_original_size_var.set(f"Original Size: {self.format_size(size)}")
             self.compress_compressed_size_var.set("Compressed Size: N/A")
 
+
     def select_compress_folder(self):
         folder = filedialog.askdirectory()
         if folder:
@@ -409,6 +467,7 @@ class SplitPDFApp:
             self.compress_original_size_var.set("Original Size: N/A")
             self.compress_compressed_size_var.set("Compressed Size: N/A")
 
+
     def compress_pdf(self):
         if self.compress_input_file:
             self._compress_single_pdf(self.compress_input_file)
@@ -416,6 +475,7 @@ class SplitPDFApp:
             self._compress_folder_pdfs(self.compress_input_folder)
         else:
             messagebox.showerror("No PDF or Folder Selected", "Please select a PDF file or a folder to compress.")
+
 
     def _compress_single_pdf(self, input_file):
         output_path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF Files", "*.pdf")], title="Save Compressed PDF As")
@@ -454,6 +514,7 @@ class SplitPDFApp:
         except Exception as e:
             log_exception("compress_pdf", e, log_file_path)
             messagebox.showerror("Error", f"Failed to compress PDF:\n{e}")
+
 
     def _compress_folder_pdfs(self, input_folder):
         output_folder = input_folder.rstrip("/\\") + "_compressed"
@@ -502,6 +563,7 @@ class SplitPDFApp:
                 log_exception("compress_pdf", e, log_file_path)
         messagebox.showinfo("Done", f"Compressed {count} PDF(s). Output folder: {output_folder}")
 
+
     def format_size(self, size_bytes):
         if size_bytes < 1024:
             return f"{size_bytes} B"
@@ -509,6 +571,7 @@ class SplitPDFApp:
             return f"{size_bytes/1024:.1f} KB"
         else:
             return f"{size_bytes/1024/1024:.2f} MB"
+
 
     def browse_dismissal(self):
         if self.processing:
@@ -519,6 +582,7 @@ class SplitPDFApp:
             self.dismissal_folder.set(path)
             self.run_type(path, "dismissal", "FileNo", self.progress_dismissal)
 
+
     def browse_lien(self):
         if self.processing:
             messagebox.showwarning("Wait", "A process is already running.")
@@ -528,10 +592,12 @@ class SplitPDFApp:
             self.lien_folder.set(path)
             self.run_type(path, "lien", "CaseNo", self.progress_lien)
 
+
     def run_type(self, folder, keyword_match, id_keyword, progressbar):
         def update_progress(val):
             if self.root.winfo_exists():
                 self.root.after(0, lambda: progressbar.config(value=val))
+
 
         def worker():
             self.processing = True
@@ -540,14 +606,17 @@ class SplitPDFApp:
                     messagebox.showerror("Error", "Invalid folder path.")
                     return
 
+
                 pdfs = [os.path.join(folder, f) for f in os.listdir(folder)
                         if f.lower().endswith('.pdf') and keyword_match in f.lower()]
                 if not pdfs:
                     messagebox.showerror("Error", f"No '{keyword_match}' PDFs found.")
                     return
 
+
                 log_file_path = os.path.join(APP_LOG_DIR, f"{keyword_match}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_log.txt")
                 self.latest_log_file = log_file_path
+
 
                 progressbar["value"] = 0
                 total_files = len(pdfs)
@@ -556,12 +625,15 @@ class SplitPDFApp:
                 messagebox.showinfo("Done", f"Processed {total_files} {keyword_match} PDF(s).")
                 progressbar["value"] = 0
 
+
             except Exception as e:
                 log_exception("run_type", e, self.latest_log_file or os.path.join(APP_LOG_DIR, "error_fallback.log"))
             finally:
                 self.processing = False
 
+
         threading.Thread(target=worker, daemon=True).start()
+
 
     def on_closing(self):
         log_file_path = self.latest_log_file
@@ -575,9 +647,13 @@ class SplitPDFApp:
                     f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Program closed normally.\n")
         self.root.destroy()
 
+
 if __name__ == "__main__":
     clean_old_logs()
     root = tk.Tk()
     app = SplitPDFApp(root)
     root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()
+
+
+
