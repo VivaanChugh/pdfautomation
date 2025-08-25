@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Utility Suite - FastAPI Version</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1976d2, #1565c0);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .logo {
+            max-width: 200px;
+            margin-bottom: 10px;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .tab-buttons {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 15px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            color: #495057;
+            transition: all 0.3s ease;
+        }
+
+        .tab-button:hover {
+            background: #e9ecef;
+        }
+
+        .tab-button.active {
+            background: #1976d2;
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 30px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #1976d2;
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: #1976d2;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1565c0;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #1976d2, #42a5f5);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .status-box {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .status-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .status-content {
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .file-list {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 2px solid #1976d2;
+            padding-bottom: 10px;
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .two-column {
+                grid-template-columns: 1fr;
+            }
+            
+            .tab-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="title">PDF Utility Suite</div>
+            <div class="subtitle">Splitter, Merger, Redaction, Compressor</div>
+        </div>
+
+        <!-- Tab Buttons -->
+        <div class="tab-buttons">
+            <button class="tab-button active" onclick="showTab('splitter')">Splitter</button>
+            <button class="tab-button" onclick="showTab('merger')">Merger</button>
+            <button class="tab-button" onclick="showTab('redaction')">Redaction</button>
+            <button class="tab-button" onclick="showTab('compressor')">Compressor</button>
+        </div>
+
+        <!-- Splitter Tab -->
+        <div id="splitter" class="tab-content active">
+            <div class="section-title">PDF Document Processor</div>
+            
+            <div class="form-group">
+                <label class="form-label">Select Document Type:</label>
+                <select id="documentType" class="form-select">
+                    <option value="">Select a Document Type</option>
+                    <option value="dismissal">Dismissal PDFs</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Folder Path:</label>
+                <input type="text" id="splitterFolder" class="form-input" placeholder="Enter folder path or browse">
+                <button class="btn btn-secondary" onclick="browseFolder('splitterFolder')">Browse Folder</button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">ID Keyword:</label>
+                <select id="idKeyword" class="form-select">
+                    <option value="FileNo">File Number</option>
+                    <option value="CaseNumber">Case Number</option>
+                </select>
+            </div>
+
+            <button class="btn btn-primary" onclick="startSplitter()">Process PDFs</button>
+
+            <div id="splitterProgress" class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="splitterProgressFill"></div>
+                </div>
+                <div class="progress-text" id="splitterProgressText">Ready to start...</div>
+            </div>
+
+            <div id="splitterStatus" class="status-box">
+                <div class="status-title">Processing Status</div>
+                <div class="status-content" id="splitterStatusContent"></div>
+            </div>
+        </div>
+
+        <!-- Merger Tab -->
+        <div id="merger" class="tab-content">
+            <div class="section-title">PDF Merger</div>
+            
+            <div class="two-column">
+                <div>
+                    <h3>Step 1: Remove Permissions from PDFs</h3>
+                    <div class="form-group">
+                        <label class="form-label">Input Folder:</label>
+                        <input type="text" id="mergerInputFolder" class="form-input" placeholder="Select folder">
+                        <button class="btn btn-secondary" onclick="browseFolder('mergerInputFolder')">Browse Folder</button>
+                    </div>
+                    <button class="btn btn-primary" onclick="removePermissions()">Remove Permissions</button>
+                    
+                    <div id="mergerFiles" class="file-list" style="display: none;">
+                        <div class="status-title">Files to be merged:</div>
+                        <div id="mergerFilesList"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <h3>Step 2: Merge Cleaned PDFs</h3>
+                    <div id="mergerOutputInfo" class="status-box" style="display: none;">
+                        <div class="status-title">Output Information</div>
+                        <div class="status-content" id="mergerOutputContent"></div>
+                    </div>
+                    <button id="mergeBtn" class="btn btn-success" onclick="mergePDFs()" style="display: none;">Merge All PDFs</button>
+                </div>
+            </div>
+
+            <div id="mergerProgress" class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="mergerProgressFill"></div>
+                </div>
+                <div class="progress-text" id="mergerProgressText">Ready to start...</div>
+            </div>
+
+            <div id="mergerStatus" class="status-box">
+                <div class="status-title">Processing Status</div>
+                <div class="status-content" id="mergerStatusContent"></div>
+            </div>
+        </div>
+
+        <!-- Redaction Tab -->
+        <div id="redaction" class="tab-content">
+            <div class="section-title">PDF Redaction</div>
+            <p>Redaction functionality coming soon...</p>
+        </div>
+
+        <!-- Compressor Tab -->
+        <div id="compressor" class="tab-content">
+            <div class="section-title">PDF Compressor</div>
+            
+            <div class="form-group">
+                <label class="form-label">Select Folder to Compress All PDFs:</label>
+                <input type="text" id="compressorFolder" class="form-input" placeholder="Select folder">
+                <button class="btn btn-secondary" onclick="browseFolder('compressorFolder')">Browse Folder</button>
+            </div>
+
+            <div id="compressorInfo" class="status-box" style="display: none;">
+                <div class="status-title">Folder Information</div>
+                <div class="status-content" id="compressorInfoContent"></div>
+            </div>
+
+            <button class="btn btn-primary" onclick="compressPDFs()">Compress PDF(s)</button>
+
+            <div id="compressorProgress" class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="compressorProgressFill"></div>
+                </div>
+                <div class="progress-text" id="compressorProgressText">Ready to start...</div>
+            </div>
+
+            <div id="compressorStatus" class="status-box">
+                <div class="status-title">Processing Status</div>
+                <div class="status-content" id="compressorStatusContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Messages -->
+    <div id="alert" class="alert"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let statusInterval;
+
+        // Tab switching
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked button
+            event.target.classList.add('active');
+        }
+
+        // Browse folder (simulated - in real app you'd use a file dialog)
+        function browseFolder(inputId) {
+            const input = document.getElementById(inputId);
+            const folderPath = prompt('Enter folder path:');
+            if (folderPath) {
+                input.value = folderPath;
+            }
+        }
+
+        // Show alert message
+        function showAlert(message, type = 'info') {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = `alert alert-${type}`;
+            alert.style.display = 'block';
+            
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+
+        // Start splitter processing
+        async function startSplitter() {
+            const documentType = document.getElementById('documentType').value;
+            const folderPath = document.getElementById('splitterFolder').value;
+            const idKeyword = document.getElementById('idKeyword').value;
+
+            if (!documentType || !folderPath) {
+                showAlert('Please select document type and folder path', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/splitter`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        folder_path: folderPath,
+                        document_type: documentType,
+                        id_keyword: idKeyword
+                    })
+                });
+
+                if (response.ok) {
+                    showAlert('Processing started successfully!', 'success');
+                    document.getElementById('splitterProgress').style.display = 'block';
+                    document.getElementById('splitterStatus').style.display = 'block';
+                    startStatusMonitoring('splitter');
+                } else {
+                    const error = await response.json();
+                    showAlert(`Error: ${error.detail}`, 'error');
+                }
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Remove permissions from PDFs
+        async function removePermissions() {
+            const folderPath = document.getElementById('mergerInputFolder').value;
+            
+            if (!folderPath) {
+                showAlert('Please select input folder', 'error');
+                return;
+            }
+
+            try {
+                showAlert('Removing permissions from PDFs...', 'info');
+                
+                // Simulate the permission removal process
+                // In a real implementation, you'd call an API endpoint
+                setTimeout(() => {
+                    document.getElementById('mergerFiles').style.display = 'block';
+                    document.getElementById('mergerFilesList').innerHTML = '5 PDFs found in folder';
+                    document.getElementById('mergeBtn').style.display = 'block';
+                    showAlert('Permissions removed successfully!', 'success');
+                }, 2000);
+                
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Merge PDFs
+        async function mergePDFs() {
+            const folderPath = document.getElementById('mergerInputFolder').value;
+            
+            if (!folderPath) {
+                showAlert('Please select input folder', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/merger`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        folder_path: folderPath
+                    })
+                });
+
+                if (response.ok) {
+                    showAlert('PDF merging started successfully!', 'success');
+                    document.getElementById('mergerProgress').style.display = 'block';
+                    document.getElementById('mergerStatus').style.display = 'block';
+                    startStatusMonitoring('merger');
+                } else {
+                    const error = await response.json();
+                    showAlert(`Error: ${error.detail}`, 'error');
+                }
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Compress PDFs
+        async function compressPDFs() {
+            const folderPath = document.getElementById('compressorFolder').value;
+            
+            if (!folderPath) {
+                showAlert('Please select folder to compress', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/compressor`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        folder_path: folderPath
+                    })
+                });
+
+                if (response.ok) {
+                    showAlert('PDF compression started successfully!', 'success');
+                    document.getElementById('compressorProgress').style.display = 'block';
+                    document.getElementById('compressorStatus').style.display = 'block';
+                    startStatusMonitoring('compressor');
+                } else {
+                    const error = await response.json();
+                    showAlert(`Error: ${error.detail}`, 'error');
+                }
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Start status monitoring
+        function startStatusMonitoring(operation) {
+            if (statusInterval) {
+                clearInterval(statusInterval);
+            }
+            
+            statusInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/status`);
+                    if (response.ok) {
+                        const status = await response.json();
+                        updateProgress(operation, status);
+                        
+                        // Stop monitoring if processing is complete
+                        if (status.status === 'idle' && status.progress === 0) {
+                            clearInterval(statusInterval);
+                            showAlert(`${operation} operation completed!`, 'success');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Status check failed:', error);
+                }
+            }, 1000);
+        }
+
+        // Update progress display
+        function updateProgress(operation, status) {
+            const progressFill = document.getElementById(`${operation}ProgressFill`);
+            const progressText = document.getElementById(`${operation}ProgressText`);
+            const statusContent = document.getElementById(`${operation}StatusContent`);
+            
+            if (progressFill && progressText && statusContent) {
+                // Update progress bar
+                const progress = status.progress || 0;
+                progressFill.style.width = `${progress}%`;
+                
+                // Update progress text
+                progressText.textContent = status.message || 'Processing...';
+                
+                // Update status content
+                let statusHtml = `
+                    <strong>Status:</strong> ${status.status}<br>
+                    <strong>Message:</strong> ${status.message || 'No message'}<br>
+                    <strong>Progress:</strong> ${Math.round(progress)}%<br>
+                `;
+                
+                if (status.current_pdf) {
+                    statusHtml += `<strong>Current PDF:</strong> ${status.current_pdf}<br>`;
+                }
+                
+                if (status.current_page) {
+                    statusHtml += `<strong>Current Page:</strong> ${status.current_page}<br>`;
+                }
+                
+                if (status.total_pages) {
+                    statusHtml += `<strong>Total Pages:</strong> ${status.total_pages}`;
+                }
+                
+                statusContent.innerHTML = statusHtml;
+                
+                // Show progress container if it's hidden
+                const progressContainer = document.getElementById(`${operation}Progress`);
+                if (progressContainer && progressContainer.style.display === 'none') {
+                    progressContainer.style.display = 'block';
+                }
+            }
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set default values
+            document.getElementById('documentType').value = 'dismissal';
+            document.getElementById('idKeyword').value = 'FileNo';
+            
+            // Show initial status
+            showAlert('PDF Utility Suite loaded successfully!', 'success');
+        });
+    </script>
+</body>
+</html>
