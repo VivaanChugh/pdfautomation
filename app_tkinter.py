@@ -2273,235 +2273,758 @@ class SplitPDFApp:
         if folder_var.get():
             self.folder_path_var.set(folder_var.get())
         
+    # ============================================================================
+    # PDF MERGER TAB INITIALIZATION
+    # ============================================================================
+    # This function sets up the PDF merger interface, which provides a two-step process:
+    # 1. Remove permissions from PDFs (security cleanup)
+    # 2. Merge multiple PDFs into a single document
+    # 
+    # WHY THIS TWO-STEP APPROACH:
+    # - Many PDFs have security restrictions that prevent merging
+    # - Removing permissions creates "clean" copies that can be combined
+    # - This is essential for legal document consolidation
+    # - The process maintains folder structure and organization
     def init_merger_tab(self):
+        # Main title for the merger section
         label = tk.Label(self.merger_tab, text="PDF Merger", font=("Arial", 14))
         label.pack(pady=10)
         
+        # ============================================================================
+        # VARIABLE INITIALIZATION FOR MERGER FUNCTIONALITY
+        # ============================================================================
+        # These variables track the state of the merging process and store user selections
+        
+        # Folder path for the source PDFs that need permission removal
         self.remove_permissions_folder = tk.StringVar()
+        
+        # Path to the "_copies" folder where cleaned PDFs are stored
+        # This is automatically created when permissions are removed
         self.copies_output_folder = None  # Path to last _copies folder
+        
+        # List of files that were copied during permission removal
+        # Displayed in the left listbox to show what was processed
         self.merger_files_var = tk.StringVar(value=[])
+        
+        # List of files that will be merged
+        # Displayed in the right listbox to show what's available for merging
         self.copied_files_var = tk.StringVar(value=[])
         
-        # --- Merge Section Layout: Horizontal Buttons ---
+        # ============================================================================
+        # MERGER INTERFACE LAYOUT - TWO-COLUMN DESIGN
+        # ============================================================================
+        # The interface is designed as a two-step workflow with clear visual separation
+        
+        # Main container frame for the entire merger section
         merge_outer_frame = tk.Frame(self.merger_tab)
         merge_outer_frame.pack(pady=5)
         
-        # Remove Permissions Section (Left)
+        # ============================================================================
+        # STEP 1: PERMISSION REMOVAL SECTION (LEFT SIDE)
+        # ============================================================================
+        # This section handles the first step: creating clean copies of PDFs
+        # by removing any security restrictions that would prevent merging
+        
         remove_frame = tk.Frame(merge_outer_frame)
         remove_frame.grid(row=0, column=0, padx=10, sticky="n")
+        
+        # Step 1 label explaining what this section does
         tk.Label(remove_frame, text="Step 1: Remove Permissions from PDFs").pack()
-        tk.Button(remove_frame, text="Select Folder and Remove Permissions", command=self.remove_permissions_from_pdfs).pack(pady=2)
+        
+        # Button to select folder and start permission removal process
+        tk.Button(remove_frame, text="Select Folder and Remove Permissions", 
+                 command=self.remove_permissions_from_pdfs).pack(pady=2)
+        
+        # Label showing the selected folder path (starts gray until folder is selected)
         self.remove_permissions_label = tk.Label(remove_frame, textvariable=self.remove_permissions_folder, fg="gray")
         self.remove_permissions_label.pack(pady=2)
+        
+        # Listbox showing all files that were copied during permission removal
+        # This gives users visibility into what was processed
         self.copied_files_listbox = tk.Listbox(remove_frame, listvariable=self.copied_files_var, width=70, height=4)
         self.copied_files_listbox.pack(pady=2)
         
-        # Merge Section (Right)
+        # ============================================================================
+        # STEP 2: PDF MERGING SECTION (RIGHT SIDE)
+        # ============================================================================
+        # This section handles the second step: combining all cleaned PDFs
+        # into a single consolidated document
+        
         merge_frame = tk.Frame(merge_outer_frame)
         merge_frame.grid(row=0, column=1, padx=10, sticky="n")
+        
+        # Step 2 label explaining what this section does
         tk.Label(merge_frame, text="Step 2: Merge Cleaned PDFs").pack()
+        
+        # Label showing which folder will be used for merging
+        # Starts with "No cleaned folder yet" until Step 1 is completed
         self.merge_folder_label = tk.Label(merge_frame, text="No cleaned folder yet", fg="gray")
         self.merge_folder_label.pack(pady=2)
+        
+        # Listbox showing PDFs available for merging
+        # Displays count and file information
         self.files_listbox = tk.Listbox(merge_frame, listvariable=self.merger_files_var, width=70, height=4)
         self.files_listbox.pack(pady=2)
-        self.merge_btn = tk.Button(merge_frame, text="Merge All PDFs in Cleaned Folder", command=self.merge_all_pdfs_in_folder, state="disabled")
+        
+        # Merge button - initially disabled until Step 1 is completed
+        # This prevents users from trying to merge before cleaning is done
+        self.merge_btn = tk.Button(merge_frame, text="Merge All PDFs in Cleaned Folder", 
+                                  command=self.merge_all_pdfs_in_folder, state="disabled")
         self.merge_btn.pack(pady=2)
 
+    # ============================================================================
+    # PERMISSION REMOVAL FUNCTION - STEP 1 OF MERGER PROCESS
+    # ============================================================================
+    # This function creates clean copies of PDFs by removing security restrictions
+    # that would prevent them from being merged. It's a crucial first step because:
+    # 
+    # WHY PERMISSION REMOVAL IS NECESSARY:
+    # - Many PDFs have password protection or editing restrictions
+    # - Some PDFs prevent copying, printing, or modification
+    # - Security settings can block the merging process entirely
+    # - Legal documents often have these restrictions for compliance
+    # 
+    # HOW IT WORKS:
+    # 1. User selects a folder containing PDFs
+    # 2. Creates a new "_copies" folder with the same structure
+    # 3. Reads each PDF and creates a new version without restrictions
+    # 4. Maintains the original folder organization
+    # 5. Prepares the cleaned PDFs for the merging step
     def remove_permissions_from_pdfs(self):
+        # ============================================================================
+        # STEP 1: FOLDER SELECTION AND VALIDATION
+        # ============================================================================
+        # Open folder selection dialog for user to choose source directory
         folder = filedialog.askdirectory(title="Select Folder to Remove Permissions from PDFs")
+        
+        # If user cancels folder selection, exit function
         if not folder:
             return
+        
+        # Store the selected folder path for display purposes
         self.remove_permissions_folder.set(folder)
+        
+        # ============================================================================
+        # STEP 2: OUTPUT FOLDER CREATION
+        # ============================================================================
+        # Create output folder by adding "_copies" suffix to original folder name
+        # This keeps original files intact while creating clean versions
         output_folder = folder.rstrip("/\\") + "_copies"
         self.copies_output_folder = output_folder
+        
+        # Create the output folder if it doesn't exist
+        # exist_ok=True prevents errors if folder already exists
         os.makedirs(output_folder, exist_ok=True)
+        
+        # ============================================================================
+        # STEP 3: PROCESSING TRACKING
+        # ============================================================================
+        # List to track all files that were successfully copied
+        # This provides feedback to the user about what was processed
         copied_files = []
+        
+        # ============================================================================
+        # STEP 4: RECURSIVE FOLDER PROCESSING
+        # ============================================================================
+        # Walk through all subdirectories to maintain folder structure
+        # This ensures complex document organizations are preserved
         for root, dirs, files in os.walk(folder):
+            # Calculate relative path from source folder to current subdirectory
             rel = os.path.relpath(root, folder)
+            
+            # Create corresponding output subdirectory
+            # If we're in the root folder (rel == '.'), use the main output folder
+            # Otherwise, create the subdirectory structure
             out_subfolder = os.path.join(output_folder, rel) if rel != '.' else output_folder
             os.makedirs(out_subfolder, exist_ok=True)
+            
+            # ============================================================================
+            # STEP 5: INDIVIDUAL PDF PROCESSING
+            # ============================================================================
+            # Process each PDF file in the current directory
             for f in files:
+                # Only process PDF files (case-insensitive check)
                 if f.lower().endswith('.pdf'):
+                    # Construct full input and output file paths
                     in_path = os.path.join(root, f)
                     out_path = os.path.join(out_subfolder, f)
+                    
                     try:
+                        # ============================================================================
+                        # STEP 6: PDF CLEANING PROCESS
+                        # ============================================================================
+                        # Read the original PDF file
                         reader = PdfReader(in_path)
+                        
+                        # Create a new PDF writer for the cleaned version
                         writer = PdfWriter()
+                        
+                        # Copy each page from the original to the new PDF
+                        # This process removes all security restrictions and metadata
                         for page in reader.pages:
                             writer.add_page(page)
+                        
+                        # Save the cleaned PDF to the output location
                         with open(out_path, "wb") as out_f:
                             writer.write(out_f)
+                        
+                        # Track successful processing
                         copied_files.append(out_path)
+                        
                     except Exception as e:
+                        # If any error occurs during processing, log it
+                        # This prevents one bad file from stopping the entire process
                         copied_files.append(f"ERROR: {in_path}")
-        self.copied_files_var.set([f"Copied: {os.path.relpath(f, output_folder)}" if not f.startswith("ERROR") else f for f in copied_files])
-        # Update merge section
+        
+        # ============================================================================
+        # STEP 7: USER FEEDBACK AND INTERFACE UPDATES
+        # ============================================================================
+        # Update the left listbox to show what files were processed
+        # Display relative paths for better readability
+        self.copied_files_var.set([
+            f"Copied: {os.path.relpath(f, output_folder)}" if not f.startswith("ERROR") else f 
+            for f in copied_files
+        ])
+        
+        # ============================================================================
+        # STEP 8: MERGER SECTION ACTIVATION
+        # ============================================================================
+        # Update the merge section to show the cleaned folder is ready
         self.merge_folder_label.config(text=f"Will merge: {output_folder}", fg="black")
+        
+        # Enable the merge button since we now have cleaned PDFs to work with
         self.merge_btn.config(state="normal")
-        # List PDFs in output folder
+        
+        # ============================================================================
+        # STEP 9: PDF COUNTING AND DISPLAY
+        # ============================================================================
+        # Count all PDFs in the output folder for merging
         pdf_files = []
         for root, dirs, files in os.walk(output_folder):
             for f in files:
                 if f.lower().endswith('.pdf'):
                     pdf_files.append(os.path.join(root, f))
+        
+        # Display the count in the right listbox
         display = [f"{len(pdf_files)} PDFs found in cleaned folder"]
         self.merger_files_var.set(display)
+        
+        # Store the list of PDF files for the merging process
         self.merger_pdf_files = pdf_files
+        
+        # ============================================================================
+        # STEP 10: COMPLETION NOTIFICATION
+        # ============================================================================
+        # Show success message with summary of what was accomplished
         messagebox.showinfo("Done", f"Copied {len(copied_files)} PDFs to {output_folder}.")
 
+    # ============================================================================
+    # PDF MERGING FUNCTION - STEP 2 OF MERGER PROCESS
+    # ============================================================================
+    # This function combines all cleaned PDFs into a single consolidated document.
+    # It's the second step of the merger process and creates a comprehensive
+    # document that contains all the individual PDFs in sequence.
+    # 
+    # WHY MERGING IS USEFUL:
+    # - Consolidates multiple related documents into one file
+    # - Creates comprehensive case files for legal proceedings
+    # - Reduces the number of files to manage and share
+    # - Maintains document order and organization
+    # - Creates a single searchable document
+    # 
+    # HOW IT WORKS:
+    # 1. Validates that Step 1 (permission removal) was completed
+    # 2. Creates a new PDF writer to combine all documents
+    # 3. Reads each cleaned PDF and adds all its pages
+    # 4. Saves the consolidated document with a descriptive name
+    # 5. Logs the entire process for audit purposes
     def merge_all_pdfs_in_folder(self):
+        # ============================================================================
+        # STEP 1: VALIDATION AND PREREQUISITE CHECKING
+        # ============================================================================
+        # Get the folder containing cleaned PDFs from Step 1
         folder = self.copies_output_folder
+        
+        # Ensure all prerequisites are met before proceeding
+        # This prevents errors and provides clear user guidance
         if not folder or not hasattr(self, 'merger_pdf_files') or not self.merger_pdf_files:
-            messagebox.showerror("No PDFs Found", "Please run Step 1 to create cleaned PDFs before merging.")
+            messagebox.showerror("No PDFs Found", 
+                               "Please run Step 1 to create cleaned PDFs before merging.")
             return
-        log_file_path = os.path.join(APP_LOG_DIR, f"merger_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_log.txt")
+        
+        # ============================================================================
+        # STEP 2: LOGGING SETUP
+        # ============================================================================
+        # Create a log file to track the merging process
+        # This provides an audit trail of what was merged and when
+        log_file_path = os.path.join(APP_LOG_DIR, 
+                                   f"merger_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_log.txt")
         self.latest_log_file = log_file_path
+        
         try:
+            # ============================================================================
+            # STEP 3: PDF MERGER INITIALIZATION
+            # ============================================================================
+            # Create a new PDF writer that will combine all the individual PDFs
+            # This writer acts as a container for all the pages from all documents
             merger = PdfWriter()
+            
+            # ============================================================================
+            # STEP 4: ITERATIVE PDF PROCESSING
+            # ============================================================================
+            # Process each PDF file that was identified in Step 1
             for pdf_file in self.merger_pdf_files:
                 try:
+                    # Read the current PDF file
                     reader = PdfReader(pdf_file)
+                    
+                    # Add all pages from this PDF to the merger
+                    # This preserves the page order within each document
                     for page in reader.pages:
                         merger.add_page(page)
+                        
                 except Exception as e:
-                    log_exception("merge_all_pdfs_in_folder", f"Failed to read {pdf_file}: {e}", log_file_path)
+                    # If any individual PDF fails to read, log the error and continue
+                    # This ensures that one bad file doesn't stop the entire merge process
+                    log_exception("merge_all_pdfs_in_folder", 
+                                f"Failed to read {pdf_file}: {e}", log_file_path)
                     continue
+            
+            # ============================================================================
+            # STEP 5: OUTPUT FILE CREATION
+            # ============================================================================
+            # Create the output filename based on the folder name
+            # This makes it easy to identify what the merged file contains
             output_path = os.path.join(folder, f"{os.path.basename(folder)}.pdf")
+            
+            # Save the merged PDF to the output location
             with open(output_path, "wb") as f_out:
                 merger.write(f_out)
+            
+            # ============================================================================
+            # STEP 6: COMPREHENSIVE LOGGING
+            # ============================================================================
+            # Record the successful merge operation with detailed information
+            # This creates a complete audit trail for compliance and troubleshooting
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(log_file_path, "a", encoding="utf-8") as f:
                 f.write(f"[{timestamp}] Merged PDF files in {folder} and all subfolders:\n")
+                
+                # List each individual file that was included in the merge
                 for file in self.merger_pdf_files:
                     f.write(f"  - {file}\n")
+                
+                # Record the final output location
                 f.write(f"Saved merged PDF as: {output_path}\n\n")
-            messagebox.showinfo("Success", f"Merged {len(self.merger_pdf_files)} PDFs into {output_path}.")
+            
+            # ============================================================================
+            # STEP 7: SUCCESS NOTIFICATION
+            # ============================================================================
+            # Inform the user that the merge was successful
+            # Include the count of files merged and the output location
+            messagebox.showinfo("Success", 
+                              f"Merged {len(self.merger_pdf_files)} PDFs into {output_path}.")
+            
         except Exception as e:
+            # ============================================================================
+            # STEP 8: ERROR HANDLING AND LOGGING
+            # ============================================================================
+            # If any error occurs during the merge process, log it and inform the user
+            # This prevents silent failures and provides troubleshooting information
             log_exception("merge_all_pdfs_in_folder", e, log_file_path)
             messagebox.showerror("Error", f"Failed to merge PDFs:\n{e}")
 
 
+    # ============================================================================
+    # PDF REDACTION TAB INITIALIZATION
+    # ============================================================================
+    # This function sets up the PDF redaction interface, which allows users to
+    # remove sensitive information from legal documents before sharing or filing.
+    # 
+    # WHAT IS PDF REDACTION:
+    # - Redaction is the process of permanently removing sensitive information
+    # - It's different from just covering text with black boxes
+    # - True redaction makes the information unreadable and unsearchable
+    # - This is essential for legal compliance and privacy protection
+    # 
+    # WHY REDACTION IS IMPORTANT:
+    # - Protects client confidentiality and privacy
+    # - Ensures compliance with data protection regulations
+    # - Allows safe sharing of documents with sensitive information
+    # - Prevents accidental disclosure of personal data
+    # 
+    # CURRENT STATUS:
+    # This tab is currently a placeholder for future redaction functionality.
+    # The interface is set up but the actual redaction features are not yet implemented.
+    # This demonstrates the extensible design of the application.
     def init_redaction_tab(self):
+        # Main title for the redaction section
         label = tk.Label(self.redaction_tab, text="PDF Redaction", font=("Arial", 14))
         label.pack(pady=20)
+        
+        # ============================================================================
+        # FUTURE REDACTION FEATURES (PLANNED)
+        # ============================================================================
+        # When implemented, this tab will include:
+        # - Text selection tools for identifying sensitive information
+        # - Automatic detection of common sensitive data patterns
+        # - Batch processing for multiple documents
+        # - Secure deletion of sensitive content
+        # - Audit trails for redaction actions
+        # - Compliance reporting for legal requirements
 
 
+    # ============================================================================
+    # PDF COMPRESSOR TAB INITIALIZATION
+    # ============================================================================
+    # This function sets up the PDF compression interface, which allows users to
+    # reduce the file size of PDF documents while maintaining acceptable quality.
+    # 
+    # WHAT IS PDF COMPRESSION:
+    # - Compression reduces file size by optimizing images and text
+    # - Uses advanced algorithms to maintain document quality
+    # - Essential for email attachments, storage, and sharing
+    # - Particularly useful for legal documents with many images
+    # 
+    # WHY COMPRESSION IS IMPORTANT:
+    # - Reduces storage space requirements
+    # - Enables email sharing of large documents
+    # - Improves upload/download speeds
+    # - Reduces bandwidth costs for document sharing
+    # - Makes documents more portable and accessible
+    # 
+    # HOW IT WORKS:
+    # - Uses Ghostscript (professional PDF processing tool)
+    # - Applies optimized compression settings for legal documents
+    # - Processes entire folders recursively
+    # - Maintains folder structure in output
+    # - Provides detailed size comparison feedback
     def init_compressor_tab(self):
+        # Main title for the compression section
         label = tk.Label(self.compressor_tab, text="PDF Compressor", font=("Arial", 14))
         label.pack(pady=10)
        
+        # ============================================================================
+        # COMPRESSION STATE VARIABLES
+        # ============================================================================
+        # These variables track the compression process and display results
+        
+        # Stores the selected input folder path
         self.compress_input_folder = None
+        
+        # Displays the total size of original files before compression
         self.compress_original_size_var = tk.StringVar(value="Original Size: N/A")
+        
+        # Displays the total size of compressed files after processing
         self.compress_compressed_size_var = tk.StringVar(value="Compressed Size: N/A")
        
-        select_folder_btn = tk.Button(self.compressor_tab, text="Select Folder to Compress All PDFs", command=self.select_compress_folder)
+        # ============================================================================
+        # COMPRESSION INTERFACE COMPONENTS
+        # ============================================================================
+        # Button to select the folder containing PDFs to compress
+        select_folder_btn = tk.Button(self.compressor_tab, 
+                                    text="Select Folder to Compress All PDFs", 
+                                    command=self.select_compress_folder)
         select_folder_btn.pack(pady=5)
        
+        # Label showing the currently selected folder (starts gray until selection)
         self.compress_file_label = tk.Label(self.compressor_tab, text="No folder selected", fg="gray")
         self.compress_file_label.pack(pady=2)
        
+        # Display labels for file size information
+        # These show the before/after comparison for user feedback
         tk.Label(self.compressor_tab, textvariable=self.compress_original_size_var).pack(pady=2)
         tk.Label(self.compressor_tab, textvariable=self.compress_compressed_size_var).pack(pady=2)
        
-        compress_btn = tk.Button(self.compressor_tab, text="Compress PDF(s)", command=self.compress_pdf)
+        # Main compression button - starts the compression process
+        compress_btn = tk.Button(self.compressor_tab, text="Compress PDF(s)", 
+                               command=self.compress_pdf)
         compress_btn.pack(pady=10)
 
+    # ============================================================================
+    # FOLDER SELECTION FOR COMPRESSION
+    # ============================================================================
+    # This function allows users to select which folder contains the PDFs they want to compress.
+    # It updates the interface to show the selected folder and prepares for compression.
     def select_compress_folder(self):
+        # Open folder selection dialog for user to choose source directory
         folder = filedialog.askdirectory()
+        
         if folder:
+            # Store the selected folder path for processing
             self.compress_input_folder = folder
+            
+            # Update the interface to show the selected folder
+            # Change color from gray to black to indicate selection
             self.compress_file_label.config(text=f"Folder: {os.path.basename(folder)}", fg="black")
+            
+            # Reset size display variables until compression is completed
             self.compress_original_size_var.set("Original Size: N/A")
             self.compress_compressed_size_var.set("Compressed Size: N/A")
 
+    # ============================================================================
+    # MAIN COMPRESSION FUNCTION
+    # ============================================================================
+    # This function initiates the PDF compression process after validating
+    # that a folder has been selected by the user.
     def compress_pdf(self):
+        # Check if a folder has been selected before proceeding
         if self.compress_input_folder:
+            # Start the compression process with the selected folder
             self._compress_folder_pdfs(self.compress_input_folder)
         else:
+            # Show error if no folder was selected
             messagebox.showerror("No Folder Selected", "Please select a folder to compress.")
 
+    # ============================================================================
+    # CORE COMPRESSION PROCESSING FUNCTION
+    # ============================================================================
+    # This function performs the actual PDF compression using Ghostscript,
+    # a professional-grade PDF processing tool. It processes all PDFs in the
+    # selected folder and its subfolders, maintaining the original structure.
+    # 
+    # WHY GHOSTSCRIPT:
+    # - Industry-standard tool for PDF manipulation
+    # - Provides high-quality compression with minimal quality loss
+    # - Supports advanced PDF features and compatibility
+    # - More reliable than basic compression libraries
+    # 
+    # COMPRESSION SETTINGS:
+    # - /ebook setting: Optimized for document sharing and storage
+    # - Compatibility Level 1.4: Ensures broad compatibility
+    # - Maintains text quality while optimizing images
     def _compress_folder_pdfs(self, input_folder):
+        # ============================================================================
+        # STEP 1: OUTPUT FOLDER CREATION
+        # ============================================================================
+        # Create output folder by adding "_compressed" suffix to original folder name
+        # This keeps original files intact while creating compressed versions
         output_folder = input_folder.rstrip("/\\") + "_compressed"
         os.makedirs(output_folder, exist_ok=True)
-        log_file_path = os.path.join(APP_LOG_DIR, f"compressor_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_log.txt")
+        
+        # ============================================================================
+        # STEP 2: LOGGING SETUP
+        # ============================================================================
+        # Create a log file to track the compression process
+        # This provides an audit trail of what was compressed and when
+        log_file_path = os.path.join(APP_LOG_DIR, 
+                                   f"compressor_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_log.txt")
         self.latest_log_file = log_file_path
+        
+        # ============================================================================
+        # STEP 3: PDF DISCOVERY AND ORGANIZATION
+        # ============================================================================
+        # List to store all PDFs that need compression
         pdfs_to_compress = []
-        # PDFs in all subfolders recursively
+        
+        # Walk through all subdirectories to maintain folder structure
+        # This ensures complex document organizations are preserved
         for root, dirs, files in os.walk(input_folder):
+            # Calculate relative path from source folder to current subdirectory
             rel = os.path.relpath(root, input_folder)
+            
+            # Create corresponding output subdirectory
+            # If we're in the root folder (rel == '.'), use the main output folder
+            # Otherwise, create the subdirectory structure
             out_subfolder = os.path.join(output_folder, rel) if rel != '.' else output_folder
             os.makedirs(out_subfolder, exist_ok=True)
+            
+            # Process each file in the current directory
             for f in files:
+                # Only process PDF files (case-insensitive check)
                 if f.lower().endswith('.pdf'):
+                    # Construct full input and output file paths
                     in_path = os.path.join(root, f)
-                    # Use get_unique_filename for output
+                    
+                    # Use get_unique_filename to prevent overwriting existing files
                     base_name = os.path.splitext(f)[0]
                     out_path = get_unique_filename(out_subfolder, base_name)
+                    
+                    # Add to the compression queue
                     pdfs_to_compress.append((in_path, out_path))
+        
+        # ============================================================================
+        # STEP 4: INDIVIDUAL PDF COMPRESSION
+        # ============================================================================
+        # Counter for successful compressions
         count = 0
+        
+        # Process each PDF file individually
         for in_path, out_path in pdfs_to_compress:
             try:
+                # ============================================================================
+                # STEP 5: GHOSTSCRIPT COMPRESSION COMMAND
+                # ============================================================================
+                # Locate the Ghostscript executable in the bundled resources
                 gs_exe = os.path.join(resource_path("ghostscript-bin"), "gswin64c.exe")
+                
+                # Build the Ghostscript command with optimized compression settings
                 gs_command = [
-                    gs_exe,
-                    "-sDEVICE=pdfwrite",
-                    "-dCompatibilityLevel=1.4",
-                    "-dPDFSETTINGS=/ebook",
-                    "-dNOPAUSE",
-                    "-dQUIET",
-                    "-dBATCH",
-                    f"-sOutputFile={out_path}",
-                    in_path
+                    gs_exe,                           # Ghostscript executable
+                    "-sDEVICE=pdfwrite",               # Output device (PDF)
+                    "-dCompatibilityLevel=1.4",        # PDF version compatibility
+                    "-dPDFSETTINGS=/ebook",            # Compression quality setting
+                    "-dNOPAUSE",                       # Don't pause between pages
+                    "-dQUIET",                         # Suppress progress messages
+                    "-dBATCH",                         # Exit after processing
+                    f"-sOutputFile={out_path}",        # Output file path
+                    in_path                            # Input file path
                 ]
+                
+                # ============================================================================
+                # STEP 6: EXECUTION AND VALIDATION
+                # ============================================================================
+                # Run the Ghostscript compression command
                 result = subprocess.run(gs_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                
+                # Check if compression was successful
                 if result.returncode != 0:
                     raise RuntimeError(f"Ghostscript error: {result.stderr.decode('utf-8')}")
+                
+                # Increment success counter
                 count += 1
+                
+                # ============================================================================
+                # STEP 7: SUCCESS LOGGING
+                # ============================================================================
+                # Log the successful compression operation
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 with open(log_file_path, "a", encoding="utf-8") as f:
                     f.write(f"[{timestamp}] Compressed PDF file: {in_path}\n")
                     f.write(f"Saved compressed PDF as: {out_path}\n\n")
+                    
             except Exception as e:
+                # ============================================================================
+                # STEP 8: ERROR HANDLING AND LOGGING
+                # ============================================================================
+                # If any error occurs during compression, log it and continue
+                # This prevents one bad file from stopping the entire process
                 log_exception("compress_pdf", e, log_file_path)
+        
+        # ============================================================================
+        # STEP 9: COMPLETION NOTIFICATION
+        # ============================================================================
+        # Show success message with summary of what was accomplished
         messagebox.showinfo("Done", f"Compressed {count} PDF(s). Output folder: {output_folder}")
 
 
+    # ============================================================================
+    # FILE SIZE FORMATTING UTILITY FUNCTION
+    # ============================================================================
+    # This function converts file sizes from bytes into human-readable formats
+    # (B, KB, MB) for display in the user interface.
+    # 
+    # WHY THIS IS USEFUL:
+    # - Raw byte counts are hard for users to understand
+    # - Human-readable sizes make compression results clear
+    # - Professional appearance in reports and displays
+    # - Consistent formatting across the application
+    # 
+    # CONVERSION LOGIC:
+    # - Less than 1 KB: Display in bytes (B)
+    # - 1 KB to 1 MB: Display in kilobytes (KB) with 1 decimal place
+    # - 1 MB and above: Display in megabytes (MB) with 2 decimal places
     def format_size(self, size_bytes):
+        # For very small files, show size in bytes
         if size_bytes < 1024:
             return f"{size_bytes} B"
+        
+        # For medium files, show size in kilobytes
         elif size_bytes < 1024*1024:
             return f"{size_bytes/1024:.1f} KB"
+        
+        # For large files, show size in megabytes
         else:
             return f"{size_bytes/1024/1024:.2f} MB"
 
 
+    # ============================================================================
+    # DOCUMENT TYPE BROWSING FUNCTIONS
+    # ============================================================================
+    # These functions handle folder selection for different document types.
+    # Each function is specialized for a specific document category and
+    # initiates the appropriate processing workflow.
+    # 
+    # WHY SEPARATE FUNCTIONS:
+    # - Different document types require different OCR approaches
+    # - Each type has specific extraction patterns and keywords
+    # - Specialized processing improves accuracy and efficiency
+    # - Clear separation makes the code more maintainable
+    
+    # ============================================================================
+    # DISMISSAL NOTICE BROWSING FUNCTION
+    # ============================================================================
+    # This function handles folder selection for dismissal notices.
+    # Dismissal notices typically contain "File No:" labels and
+    # use EasyOCR for text extraction due to complex layouts.
     def browse_dismissal(self):
+        # Check if another process is already running
+        # This prevents conflicts and resource issues
         if self.processing:
             messagebox.showwarning("Wait", "A process is already running.")
             return
+        
+        # Open folder selection dialog for user to choose dismissal documents
         path = filedialog.askdirectory()
+        
         if path:
+            # Store the selected folder path
             self.dismissal_folder.set(path)
+            
+            # Start processing with dismissal-specific parameters:
+            # - Document type: "dismissal"
+            # - Search keyword: "FileNo" (looks for file numbers)
+            # - Progress callback: self.progress_dismissal
             self.run_type(path, "dismissal", "FileNo", self.progress_dismissal)
 
-
+    # ============================================================================
+    # LIEN DOCUMENT BROWSING FUNCTION
+    # ============================================================================
+    # This function handles folder selection for lien documents.
+    # Lien documents typically contain "case no" labels and
+    # use Tesseract OCR for text extraction due to simpler layouts.
     def browse_lien(self):
+        # Check if another process is already running
         if self.processing:
             messagebox.showwarning("Wait", "A process is already running.")
             return
+        
+        # Open folder selection dialog for user to choose lien documents
         path = filedialog.askdirectory()
+        
         if path:
+            # Store the selected folder path
             self.lien_folder.set(path)
+            
+            # Start processing with lien-specific parameters:
+            # - Document type: "lien"
+            # - Search keyword: "CaseNo" (looks for case numbers)
+            # - Progress callback: self.progress_lien
             self.run_type(path, "lien", "CaseNo", self.progress_lien)
 
-
+    # ============================================================================
+    # JUDGMENT DOCUMENT BROWSING FUNCTION
+    # ============================================================================
+    # This function handles folder selection for judgment documents.
+    # Judgment documents typically contain "case number" labels and
+    # use Tesseract OCR for text extraction due to consistent formatting.
     def browse_judgement(self):
+        # Check if another process is already running
         if self.processing:
             messagebox.showwarning("Wait", "A process is already running.")
             return
+        
+        # Open folder selection dialog for user to choose judgment documents
         path = filedialog.askdirectory()
+        
+        # Store the selected folder path
         if path:
             self.judgement_folder.set(path)
+            
+            # Start processing with judgment-specific parameters:
+            # - Document type: "judgement"
+            # - Search keyword: "Case Number" (looks for case numbers)
+            # - Progress callback: self.progress_judgement
             self.run_type(path, "judgement", "Case Number", self.progress_judgement)
 
 
@@ -2625,6 +3148,32 @@ class SplitPDFApp:
             self.efile_stip_folder.set(path)
             self.run_type_efile_stip_folder(path, "efile_stip_folder", self.progress_efile_stip_folder)
 
+    # ============================================================================
+    # MAIN DOCUMENT PROCESSING FUNCTION - UNIVERSAL WORKFLOW
+    # ============================================================================
+    # This is the core processing function that handles basic document types
+    # (dismissal notices, liens, judgments). It provides a standardized workflow
+    # that can be customized for different document categories.
+    # 
+    # WHAT IT DOES:
+    # 1. Validates the selected folder and finds relevant PDFs
+    # 2. Processes each PDF using the appropriate OCR extraction method
+    # 3. Collects all extracted data for reporting
+    # 4. Generates comprehensive Excel reports
+    # 5. Provides real-time progress updates
+    # 
+    # WHY THIS DESIGN:
+    # - Single function handles multiple document types efficiently
+    # - Multi-threaded processing prevents GUI freezing
+    # - Comprehensive error handling and logging
+    # - Standardized workflow ensures consistency
+    # - Progress tracking for user feedback
+    # 
+    # PARAMETERS:
+    # - folder: Directory containing PDFs to process
+    # - keyword_match: Document type identifier (e.g., "dismissal", "lien")
+    # - id_keyword: What to extract (e.g., "FileNo", "CaseNo")
+    # - progressbar: GUI progress bar for user feedback
     def run_type(self, folder, keyword_match, id_keyword, progressbar):
         def update_progress(val):
             if self.root.winfo_exists():
@@ -2674,6 +3223,24 @@ class SplitPDFApp:
         threading.Thread(target=worker, daemon=True).start()
 
 
+    # ============================================================================
+    # SPECIALIZED PROCESSING FUNCTION - MD JUDGMENTS CAVA
+    # ============================================================================
+    # This function handles Maryland judgments from the Court of Appeals of Virginia (CAVA).
+    # It's a specialized version of the main run_type function that processes
+    # documents with specific extraction requirements.
+    # 
+    # WHY SPECIALIZED:
+    # - Different document format and layout
+    # - Specific extraction patterns for MD judgments
+    # - May require different OCR settings or preprocessing
+    # - Handles unique document characteristics
+    # 
+    # KEY DIFFERENCES FROM MAIN RUN_TYPE:
+    # - No filename restrictions (processes all PDFs in folder)
+    # - Uses specialized extraction function: process_md_judgements_cava
+    # - Optimized for MD judgment document patterns
+    # - Maintains same robust error handling and logging
     def run_type_md_judgements_cava(self, folder, keyword_match, progressbar):
         def update_progress(val):
             if self.root.winfo_exists():
@@ -2724,6 +3291,24 @@ class SplitPDFApp:
         threading.Thread(target=worker, daemon=True).start()
 
 
+    # ============================================================================
+    # SPECIALIZED PROCESSING FUNCTION - VA JUDGMENTS LVNV
+    # ============================================================================
+    # This function handles Virginia judgments from LVNV (Legal Vehicle Network Virginia).
+    # It's optimized for the specific format and content patterns found in
+    # Virginia judgment documents.
+    # 
+    # WHY SPECIALIZED:
+    # - Virginia-specific document formatting
+    # - LVNV-specific extraction patterns
+    # - Different case number formats
+    # - State-specific legal terminology
+    # 
+    # KEY FEATURES:
+    # - Processes all PDFs in folder (no filename restrictions)
+    # - Uses specialized extraction: process_va_judgements_lvnv
+    # - Maintains robust error handling and logging
+    # - Generates comprehensive Excel reports
     def run_type_va_judgements_lvnv(self, folder, keyword_match, progressbar):
         def update_progress(val):
             if self.root.winfo_exists():
@@ -2774,6 +3359,24 @@ class SplitPDFApp:
         threading.Thread(target=worker, daemon=True).start()
 
 
+    # ============================================================================
+    # SPECIALIZED PROCESSING FUNCTION - VA JUDGMENTS CAVA
+    # ============================================================================
+    # This function handles Virginia judgments from the Court of Appeals of Virginia (CAVA).
+    # It's designed for the specific document structure and extraction requirements
+    # of CAVA judgment documents.
+    # 
+    # WHY SPECIALIZED:
+    # - CAVA-specific document formatting
+    # - Different extraction patterns than other VA judgments
+    # - Court-specific terminology and layout
+    # - Specialized case number formats
+    # 
+    # KEY FEATURES:
+    # - Processes all PDFs in folder (no filename restrictions)
+    # - Uses specialized extraction: process_va_judgements_cava
+    # - Maintains robust error handling and logging
+    # - Generates comprehensive Excel reports
     def run_type_va_judgements_cava(self, folder, keyword_match, progressbar):
         def update_progress(val):
             if self.root.winfo_exists():
@@ -2824,6 +3427,24 @@ class SplitPDFApp:
         threading.Thread(target=worker, daemon=True).start()
 
 
+    # ============================================================================
+    # SPECIALIZED PROCESSING FUNCTION - JUDGMENTS MCM
+    # ============================================================================
+    # This function handles MCM (Master Case Management) judgment documents.
+    # It's optimized for the specific format and content patterns found in
+    # MCM system judgment documents.
+    # 
+    # WHY SPECIALIZED:
+    # - MCM-specific document formatting
+    # - Different extraction patterns than other judgment types
+    # - System-specific terminology and layout
+    # - Specialized case number formats
+    # 
+    # KEY FEATURES:
+    # - Processes all PDFs in folder (no filename restrictions)
+    # - Uses specialized extraction: process_judgements_mcm
+    # - Maintains robust error handling and logging
+    # - Generates comprehensive Excel reports
     def run_type_judgements_mcm(self, folder, keyword_match, progressbar):
         def update_progress(val):
             if self.root.winfo_exists():
@@ -2874,6 +3495,23 @@ class SplitPDFApp:
         threading.Thread(target=worker, daemon=True).start()
 
 
+    # ============================================================================
+    # SPECIALIZED PROCESSING FUNCTION - ORDER OF SATISFACTION
+    # ============================================================================
+    # This function handles Order of Satisfaction documents, which are legal
+    # documents indicating that a debt or obligation has been satisfied.
+    # 
+    # WHY SPECIALIZED:
+    # - Different document format than judgments
+    # - Specific extraction patterns for satisfaction orders
+    # - May contain different types of identifiers
+    # - Legal terminology specific to satisfaction documents
+    # 
+    # KEY FEATURES:
+    # - Processes all PDFs in folder (no filename restrictions)
+    # - Uses specialized extraction: process_order_satisfaction
+    # - Maintains robust error handling and logging
+    # - Generates comprehensive Excel reports
     def run_type_order_satisfaction(self, folder, keyword_match, progressbar):
         def update_progress(val):
             if self.root.winfo_exists():
@@ -2924,6 +3562,23 @@ class SplitPDFApp:
         threading.Thread(target=worker, daemon=True).start()
 
 
+    # ============================================================================
+    # SPECIALIZED PROCESSING FUNCTION - UPDATE DISMISSAL RESURGENT CAVALRY
+    # ============================================================================
+    # This function handles updated dismissal notices from Resurgent Cavalry.
+    # These are modified or updated versions of original dismissal documents.
+    # 
+    # WHY SPECIALIZED:
+    # - Updated document format and content
+    # - Resurgent Cavalry-specific extraction patterns
+    # - May contain different information than original dismissals
+    # - Company-specific terminology and layout
+    # 
+    # KEY FEATURES:
+    # - Processes all PDFs in folder (no filename restrictions)
+    # - Uses specialized extraction: process_update_dismissal_resurgent_cavalry
+    # - Maintains robust error handling and logging
+    # - Generates comprehensive Excel reports
     def run_type_update_dismissal_resurgent_cavalry(self, folder, keyword_match, progressbar):
         def update_progress(val):
             if self.root.winfo_exists():
@@ -2974,6 +3629,23 @@ class SplitPDFApp:
         threading.Thread(target=worker, daemon=True).start()
 
 
+    # ============================================================================
+    # SPECIALIZED PROCESSING FUNCTION - UPDATE LIEN CAC/CAVALRY
+    # ============================================================================
+    # This function handles updated lien documents from CAC (Credit Acceptance Corporation)
+    # and Cavalry. These are modified or updated versions of original lien documents.
+    # 
+    # WHY SPECIALIZED:
+    # - Updated document format and content
+    # - CAC/Cavalry-specific extraction patterns
+    # - May contain different information than original liens
+    # - Company-specific terminology and layout
+    # 
+    # KEY FEATURES:
+    # - Processes all PDFs in folder (no filename restrictions)
+    # - Uses specialized extraction: process_update_lien_cac_cavalry
+    # - Maintains robust error handling and logging
+    # - Generates comprehensive Excel reports
     def run_type_update_lien_cac_cavalry(self, folder, keyword_match, progressbar):
         def update_progress(val):
             if self.root.winfo_exists():
@@ -3024,6 +3696,23 @@ class SplitPDFApp:
         threading.Thread(target=worker, daemon=True).start()
 
 
+    # ============================================================================
+    # SPECIALIZED PROCESSING FUNCTION - UPDATE SERVICE MD GARNS
+    # ============================================================================
+    # This function handles updated service documents from Maryland garnishment
+    # proceedings. These are modified or updated versions of original service documents.
+    # 
+    # WHY SPECIALIZED:
+    # - Updated document format and content
+    # - Maryland-specific garnishment terminology
+    # - Service document-specific extraction patterns
+    # - State-specific legal requirements
+    # 
+    # KEY FEATURES:
+    # - Processes all PDFs in folder (no filename restrictions)
+    # - Uses specialized extraction: process_update_service_md_garns
+    # - Maintains robust error handling and logging
+    # - Generates comprehensive Excel reports
     def run_type_update_service_md_garns(self, folder, keyword_match, progressbar):
         def update_progress(val):
             if self.root.winfo_exists():
@@ -3074,6 +3763,24 @@ class SplitPDFApp:
         threading.Thread(target=worker, daemon=True).start()
 
 
+    # ============================================================================
+    # SPECIALIZED PROCESSING FUNCTION - UPLOAD MD LVNV
+    # ============================================================================
+    # This function handles Maryland documents from LVNV (Legal Vehicle Network Virginia).
+    # These are specialized documents that combine Maryland legal requirements
+    # with LVNV processing systems.
+    # 
+    # WHY SPECIALIZED:
+    # - Maryland-specific legal requirements
+    # - LVNV system integration requirements
+    # - Different document format than standard MD documents
+    # - Cross-jurisdiction processing needs
+    # 
+    # KEY FEATURES:
+    # - Processes all PDFs in folder (no filename restrictions)
+    # - Uses specialized extraction: process_upload_md_lvnv
+    # - Maintains robust error handling and logging
+    # - Generates comprehensive Excel reports
     def run_type_upload_md_lvnv(self, folder, keyword_match, progressbar):
 
         def update_progress(val):
@@ -3125,6 +3832,23 @@ class SplitPDFApp:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    # ============================================================================
+    # SPECIALIZED PROCESSING FUNCTION - LIEN REQUEST
+    # ============================================================================
+    # This function handles lien request documents, which are applications
+    # or requests to establish a lien on property or assets.
+    # 
+    # WHY SPECIALIZED:
+    # - Different document format than standard liens
+    # - Request-specific extraction patterns
+    # - May contain different types of identifiers
+    # - Application-specific terminology and layout
+    # 
+    # KEY FEATURES:
+    # - Processes all PDFs in folder (no filename restrictions)
+    # - Uses specialized extraction: process_lien_req
+    # - Maintains robust error handling and logging
+    # - Generates comprehensive Excel reports
     def run_type_lien_req(self, folder, keyword_match, progressbar):
         def update_progress(val):
             if self.root.winfo_exists():
@@ -3176,6 +3900,23 @@ class SplitPDFApp:
         threading.Thread(target=worker, daemon=True).start()
 
 
+    # ============================================================================
+    # SPECIALIZED PROCESSING FUNCTION - BUSINESS RECORDS
+    # ============================================================================
+    # This function handles business records documents, which contain
+    # corporate or business-related information and documentation.
+    # 
+    # WHY SPECIALIZED:
+    # - Business document-specific formatting
+    # - Corporate terminology and layout
+    # - Different extraction patterns than legal documents
+    # - Business identifier formats
+    # 
+    # KEY FEATURES:
+    # - Processes all PDFs in folder (no filename restrictions)
+    # - Uses specialized extraction: process_bus_rec
+    # - Maintains robust error handling and logging
+    # - Generates comprehensive Excel reports
     def run_type_bus_rec(self, folder, keyword_match, progressbar):
         def update_progress(val):
             if self.root.winfo_exists():
@@ -3226,6 +3967,23 @@ class SplitPDFApp:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    # ============================================================================
+    # SPECIALIZED PROCESSING FUNCTION - EFILE STIPULATION FOLDER
+    # ============================================================================
+    # This function handles e-filed stipulation documents, which are
+    # electronically filed legal agreements or stipulations.
+    # 
+    # WHY SPECIALIZED:
+    # - E-filing system-specific formatting
+    # - Digital document characteristics
+    # - Stipulation-specific extraction patterns
+    # - Electronic filing terminology and layout
+    # 
+    # KEY FEATURES:
+    # - Processes all PDFs in folder (no filename restrictions)
+    # - Uses specialized extraction: process_efile_stip_folder
+    # - Maintains robust error handling and logging
+    # - Generates comprehensive Excel reports
     def run_type_efile_stip_folder(self, folder, keyword_match, progressbar):
         def update_progress(val):
             if self.root.winfo_exists():
